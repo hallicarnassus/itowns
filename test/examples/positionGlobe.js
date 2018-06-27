@@ -63,4 +63,51 @@ describe('positionGlobe', () => {
 
         await page.close();
     });
+    it('should get picking position from depth', async function _() {
+        const page = await browser.newPage();
+
+        await page.setViewport({ width: 1000, height: 800 });
+        await page.goto(`http://localhost:${itownsPort}/examples/positionGlobe.html`);
+        await page.waitFor('#viewerDiv > canvas');
+        await exampleCanRenderTest(page, this.test.fullTitle());
+
+        // wait cone creation
+        await page.evaluate(() =>
+            new Promise((resolve) => {
+                globeView.addFrameRequester('after_render', () => {
+                    if (globeView.mesh) {
+                        resolve();
+                    } else {
+                        globeView.notifyChange();
+                    }
+                });
+                globeView.notifyChange();
+            }));
+
+        // Hide cone the cone and set range
+        const destRange = 1500;
+        await page.evaluate((range) => {
+            globeView.mesh.material.visible = false;
+            globeView.controls.setRange(range);
+        }, destRange);
+
+        // wait animation ending and get range value with globeControls method
+        const controlsMethod = await page.evaluate(() =>
+            new Promise((resolve) => {
+                const endAni = () => {
+                    globeView.controls.removeEventListener('animation-ended', endAni);
+                    resolve(globeView.controls.getRange());
+                };
+                globeView.controls.addEventListener('animation-ended', endAni);
+            }));
+
+        // get range with depth buffer
+        const depthMethod = await page.evaluate(() => globeView
+            .getPickingPositionFromDepth().distanceTo(globeView.camera.camera3D.position));
+
+        assert.ok(controlsMethod - destRange < 1);
+        assert.ok(depthMethod - destRange < 1);
+
+        await page.close();
+    });
 });
