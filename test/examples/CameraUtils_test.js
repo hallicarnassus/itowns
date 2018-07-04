@@ -45,7 +45,8 @@ describe('Camera utils with globe example', () => {
                     itowns.CameraUtils.getTransformCameraLookingAtTarget(
                         globeView, camera).range);
         }, params);
-        assert.equal(Math.round(result / 20) * 20, params.range);
+
+        assert.ok(Math.abs(result - params.range) / params.range < 0.05);
         page.close();
         await page.close();
     });
