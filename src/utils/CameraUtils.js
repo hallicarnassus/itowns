@@ -26,7 +26,8 @@ function tileLayer(view) {
 // fix coord.altitude < 0 and !pickedPosition (with plane and ellipsoid intersection)
 function getGroundTargetFromCamera(view, camera, target) {
     camera.updateMatrixWorld(true);
-    const pickedPosition = view.getPickingPositionFromDepth();
+    // FIXME view.wgs84TileLayer
+    const pickedPosition = view.wgs84TileLayer ? view.getPickingPositionFromDepth() : undefined;
     const range = pickedPosition && !isNaN(pickedPosition.x) ? camera.position.distanceTo(pickedPosition) : 100;
     camera.localToWorld(target.set(0, 0, -range));
 }
@@ -155,7 +156,7 @@ class CameraRig extends THREE.Object3D {
 
     getParams() {
         return {
-            coord: this.coord,
+            coord: this.coord.clone(),
             tilt: this.tilt,
             heading: this.heading,
             range: this.range,
@@ -223,10 +224,14 @@ class CameraRig extends THREE.Object3D {
             .easing(TWEEN.Easing.Quartic.InOut));
 
         // update animations, transformation and view
+        const worldPosition = new THREE.Vector3();
+        const newCoord = new Coordinates(view.referenceCrs, worldPosition);
         const animationFrameRequester = () => {
             tweenGroup.update();
             this.updateMatrixWorld(true);
             this.applyTransformToCamera(view, camera);
+            worldPosition.setFromMatrixPosition(this.seaLevel.matrixWorld);
+            newCoord.set(view.referenceCrs, worldPosition).as(tileLayer(view).extent.crs(), this.coord);
             view.notifyChange(camera);
         };
 
@@ -342,7 +347,7 @@ export default {
             rig.addPlaceTargetOnGround(view, camera, params.coord);
             rig.applyTransformToCamera(view, camera);
             view.notifyChange(camera);
-            return Promise.resolve();
+            return Promise.resolve(rig.getParams());
         });
     },
     /**
@@ -360,8 +365,43 @@ export default {
             if (params.proxy) {
                 rig.setProxy(view, camera);
             }
-            return rig.animateCameraToLookAtTarget(view, camera, params).promise;
+            return rig.animateCameraToLookAtTarget(view, camera, params).promise.then(() => rig.getParams());
         });
+    },
+
+    getDiffParams(previous, newP) {
+        let diff;
+        if (Math.abs(previous.range - newP.range) / previous.range > 0.001) {
+            diff = diff || {};
+            diff.range = {
+                previous: previous.range,
+                new: newP.range,
+            };
+        }
+        if (Math.abs(previous.tilt - newP.tilt) > 0.1) {
+            diff = diff || {};
+            diff.tilt = {
+                previous: previous.tilt,
+                new: newP.tilt,
+            };
+        }
+        if (Math.abs(previous.heading - newP.heading) > 0.1) {
+            diff = diff || {};
+            diff.heading = {
+                previous: previous.heading,
+                new: newP.heading,
+            };
+        }
+
+        if (Math.abs(previous.coord._values[0] - newP.coord._values[0]) > 0.1 ||
+            Math.abs(previous.coord._values[1] - newP.coord._values[1] > 0.1)) {
+            diff = diff || {};
+            diff.coord = {
+                previous: previous.coord,
+                new: newP.coord,
+            };
+        }
+        return diff;
     },
 };
 

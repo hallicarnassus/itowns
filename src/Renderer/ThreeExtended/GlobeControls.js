@@ -161,6 +161,8 @@ export const CONTROL_EVENTS = {
     CAMERA_TARGET_CHANGED: 'camera-target-changed',
 };
 
+let previous;
+
 /**
  * @class
  * @param {GlobeView} view
@@ -616,6 +618,7 @@ function GlobeControls(view, target, radius, options = {}) {
             event.preventDefault();
 
             updateTarget(true);
+            previous = CameraUtils.getTransformCameraLookingAtTarget(view, this.camera);
             state = inputToState(event.button, currentKey, this.states);
 
             const coords = view.eventToViewCoords(event);
@@ -672,6 +675,52 @@ function GlobeControls(view, target, radius, options = {}) {
         });
     }
 
+    this._onEndingMove = (current) => {
+        state = this.states.NONE;
+        current = current || CameraUtils.getTransformCameraLookingAtTarget(view, this.camera);
+        const diff = CameraUtils.getDiffParams(previous, current);
+        if (diff) {
+            if (diff.range) {
+                this.dispatchEvent({
+                    type: CONTROL_EVENTS.RANGE_CHANGED,
+                    previous: { range: diff.range.previous },
+                    new: { range: diff.range.new },
+                });
+            }
+            if (diff.coord) {
+                this.dispatchEvent({
+                    type: CONTROL_EVENTS.CAMERA_TARGET_CHANGED,
+                    previous: { coord: diff.coord.previous },
+                    new: { coord: diff.coord.new },
+                });
+            }
+            if (diff.tilt || diff.heading) {
+                const event = {
+                    type: CONTROL_EVENTS.ORIENTATION_CHANGED,
+                };
+                if (diff.tilt) {
+                    event.previous = { tilt: diff.tilt.previous };
+                    event.new = { tilt: diff.tilt.new };
+                }
+
+                if (diff.heading) {
+                    event.previous = event.previous || {};
+                    event.new = event.new || {};
+                    event.new.heading = diff.heading.new;
+                    event.previous.heading = diff.heading.previous;
+                }
+
+                this.dispatchEvent(event);
+            }
+        }
+    };
+
+    // test remove it
+    // this.addEventListener(CONTROL_EVENTS.RANGE_CHANGED, event => console.log(event.previous.range, ' -> ', event.new.range));
+    // this.addEventListener(CONTROL_EVENTS.ORIENTATION_CHANGED, event => console.log(event.previous.tilt, ' -> ', event.new.tilt));
+    // this.addEventListener(CONTROL_EVENTS.ORIENTATION_CHANGED, event => console.log(event.previous.heading, ' -> ', event.new.heading));
+    // this.addEventListener(CONTROL_EVENTS.CAMERA_TARGET_CHANGED, event => console.log(event.previous.coord.longitude(), ' -> ', event.new.coord.longitude()));
+
     function onMouseUp() {
         if (this.enabled === false) return;
 
@@ -687,15 +736,15 @@ function GlobeControls(view, target, radius, options = {}) {
         //      * this.states.MOVE_GLOBE
         if (this.enableDamping) {
             if (state === this.states.ORBIT && (sphericalDelta.theta > EPS || sphericalDelta.phi > EPS)) {
-                player.play(animationDampingOrbital).then(() => { state = this.states.NONE; });
+                player.play(animationDampingOrbital).then(this._onEndingMove);
             } else if (state === this.states.MOVE_GLOBE && (Date.now() - lastTimeMouseMove < 50)) {
                 // animation since mouse up event occurs less than 50ms after the last mouse move
-                player.play(animationDampingMove).then(() => { state = this.states.NONE; });
+                player.play(animationDampingMove).then(this._onEndingMove);
             } else {
-                state = this.states.NONE;
+                this._onEndingMove();
             }
         } else {
-            state = this.states.NONE;
+            this._onEndingMove();
         }
     }
 
@@ -1243,10 +1292,11 @@ GlobeControls.prototype.lookAtCoordinate = function _lookAtCoordinate(coord, isA
  * The zoom has to be between the [getMinZoom(), getMaxZoom()].
  * Zoom parameter is ignored if range is set
  *
- * @param      {cameraTransformOptions}   params      camera transformation to apply
- * @param      {number}   params.zoom   zoom
- * @param      {number}   params.scale   scale
+ * @param      {cameraTransformOptions}   params camera transformation to apply
+ * @param      {number}   [params.zoom]   zoom
+ * @param      {number}   [params.scale]   scale
  * @param      {boolean}  isAnimated  Indicates if animated
+ * @return     {Promise}  A promise that resolves when transformation is oppered
  */
 GlobeControls.prototype.lookAtCoordinateAdvanced = function _lookAtCoordinateAdvanced(params = {}, isAnimated = this.isAnimationEnabled()) {
     if (params.zoom) {
@@ -1255,14 +1305,19 @@ GlobeControls.prototype.lookAtCoordinateAdvanced = function _lookAtCoordinateAdv
         const gfx = this._view.mainLoop.gfxEngine;
         params.range = getRangeFromScale(params.scale, params.pitch, this.camera.fov, gfx.height);
     }
-
+    let promise;
+    previous = CameraUtils.getTransformCameraLookingAtTarget(this._view, this.camera);
     if (isAnimated) {
         this.dispatchEvent({ type: 'animation-started' });
-        CameraUtils.animateCameraToLookAtTarget(this._view, this.camera, params)
-            .then(() => this.dispatchEvent({ type: 'animation-ended' }));
+        promise = CameraUtils.animateCameraToLookAtTarget(this._view, this.camera, params)
+            .then((result) => {
+                this.dispatchEvent({ type: 'animation-ended' });
+                return result;
+            });
     } else {
-        CameraUtils.transformCameraToLookAtTarget(this._view, this.camera, params);
+        promise = CameraUtils.transformCameraToLookAtTarget(this._view, this.camera, params);
     }
+    return promise.then(this._onEndingMove);
 };
 
 /**

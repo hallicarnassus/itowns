@@ -378,6 +378,9 @@ const screen = new THREE.Vector2();
 const ray = new THREE.Ray();
 const direction = new THREE.Vector3();
 GlobeView.prototype.getPickingPositionFromDepth = function getPickingPositionFromDepth(mouse, target = new THREE.Vector3()) {
+    if (!this.wgs84TileLayer) {
+        return;
+    }
     const l = this.mainLoop;
     const viewPaused = l.scheduler.commandsWaitingExecutionCount() == 0 && l.renderingState == RENDERING_PAUSED;
     const g = l.gfxEngine;
