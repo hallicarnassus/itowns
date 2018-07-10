@@ -15,14 +15,8 @@ import utf8Decoder from '../utils/Utf8Decoder';
  *
  * @example
  * var layer = new itowns.GeometryLayer('3dtiles-example');
- * layer.preUpdate = preUpdateGeo;
- * layer.update = itowns.process3dTilesNode(
- *     itowns.$3dTilesCulling,
- *     itowns.$3dTilesSubdivisionControl
- * );
- * layer.url = 'http://example/tileset.json';
  * layer.protocol = '3d-tiles'
- * layer.type = 'geometry';
+ * layer.url = 'http://example/tileset.json';
  *
  * @property {string} url - tileset.json URL
  * @property {boolean|THREE.Material} [overrideMaterial=false] - override meshes material
