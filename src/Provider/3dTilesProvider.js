@@ -20,7 +20,7 @@ import utf8Decoder from '../utils/Utf8Decoder';
  *     itowns.$3dTilesCulling,
  *     itowns.$3dTilesSubdivisionControl
  * );
- * layer.url = 'http://example/tileset.json;
+ * layer.url = 'http://example/tileset.json';
  * layer.protocol = '3d-tiles'
  * layer.type = 'geometry';
  *
