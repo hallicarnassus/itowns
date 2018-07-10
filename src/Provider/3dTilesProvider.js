@@ -4,8 +4,9 @@ import PntsParser from '../Parser/PntsParser';
 import Fetcher from './Fetcher';
 import OBB from '../Renderer/ThreeExtended/OBB';
 import Extent from '../Core/Geographic/Extent';
-import { init3dTilesLayer } from '../Process/3dTilesProcessing';
+import { pre3dTilesUpdate, process3dTilesNode, init3dTilesLayer } from '../Process/3dTilesProcessing';
 import utf8Decoder from '../utils/Utf8Decoder';
+
 
 /**
  * iTowns supports loading and displaying 3d-tiles tilesets.
@@ -86,6 +87,8 @@ export function $3dTilesIndex(tileset, baseURL) {
 }
 
 function preprocessDataLayer(layer, view, scheduler) {
+    layer.preUpdate = layer.preUpdate || pre3dTilesUpdate;
+    layer.update = layer.update || process3dTilesNode();
     layer.sseThreshold = layer.sseThreshold || 16;
     layer.cleanupDelay = layer.cleanupDelay || 1000;
 
