@@ -27,33 +27,24 @@ function preprocessDataLayer(layer) {
     layer.fx = layer.fx || 0.0;
 }
 
-function getVectorTile(tile, coords, layer) {
-    const url = URLBuilder.xyz(coords, layer);
-
-    if (layer.type == 'color') {
-        return VectorTileHelper.getVectorTileTextureByUrl(url, tile, layer, coords);
-    }
-}
-
 function executeCommand(command) {
     const layer = command.layer;
     const tile = command.requester;
+    const isGlobeView = !command.view.wgs84TileLayer;
 
     const promises = [];
-    const supportedFormats = {
-        'application/x-protobuf;type=mapbox-vector': getVectorTile.bind(this),
-    };
-    const func = supportedFormats[layer.format];
 
     for (const coordTMS of tile.getCoordsForLayer(layer)) {
-        if (func) {
-            promises.push(func(tile, coordTMS, layer));
-        } else {
-            const coordTMSParent = (command.targetLevel < coordTMS.zoom) ?
-                OGCWebServiceHelper.WMTS_WGS84Parent(coordTMS, command.targetLevel) :
-                undefined;
-            const urld = URLBuilder.xyz(coordTMSParent || coordTMS, layer);
+        const coordTMSParent = (isGlobeView && command.targetLevel < coordTMS.zoom) ?
+            OGCWebServiceHelper.WMTS_WGS84Parent(coordTMS, command.targetLevel) :
+            undefined;
+        const urld = URLBuilder.xyz(coordTMSParent || coordTMS, layer);
 
+        if (layer.format === 'application/x-protobuf;type=mapbox-vector') {
+            if (layer.type == 'color') {
+                promises.push(VectorTileHelper.getVectorTileTextureByUrl(urld, tile, layer, coordTMS));
+            }
+        } else {
             promises.push(OGCWebServiceHelper.getColorTextureByUrl(urld, layer.networkOptions).then((texture) => {
                 const result = {};
                 const pitch = coordTMSParent ?
