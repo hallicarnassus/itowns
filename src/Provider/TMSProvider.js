@@ -40,25 +40,23 @@ function executeCommand(command) {
             undefined;
         const urld = URLBuilder.xyz(coordTMSParent || coordTMS, layer);
 
-        if (layer.format === 'application/x-protobuf;type=mapbox-vector') {
-            if (layer.type == 'color') {
-                promises.push(VectorTileHelper.getVectorTileTextureByUrl(urld, tile, layer, coordTMS));
+        const promise = layer.format === 'application/x-protobuf;type=mapbox-vector' ?
+            VectorTileHelper.getVectorTileTextureByUrl(urld, tile, layer, coordTMS) :
+            OGCWebServiceHelper.getColorTextureByUrl(urld, layer.networkOptions);
+
+        promises.push(promise.then((texture) => {
+            const result = {};
+            const pitch = coordTMSParent ?
+                coordTMS.offsetToParent(coordTMSParent) :
+                new THREE.Vector4(0, 0, 1, 1);
+            result.texture = texture;
+            result.texture.coords = coordTMSParent || coordTMS;
+            result.pitch = pitch;
+            if (layer.transparent) {
+                texture.premultiplyAlpha = true;
             }
-        } else {
-            promises.push(OGCWebServiceHelper.getColorTextureByUrl(urld, layer.networkOptions).then((texture) => {
-                const result = {};
-                const pitch = coordTMSParent ?
-                    coordTMS.offsetToParent(coordTMSParent) :
-                    new THREE.Vector4(0, 0, 1, 1);
-                result.texture = texture;
-                result.texture.coords = coordTMSParent || coordTMS;
-                result.pitch = pitch;
-                if (layer.transparent) {
-                    texture.premultiplyAlpha = true;
-                }
-                return result;
-            }));
-        }
+            return result;
+        }));
     }
     return Promise.all(promises);
 }
